@@ -312,6 +312,17 @@ export function App() {
     });
   };
 
+  const handleUpdateProfileAndCategories = (
+    profile: CoupleProfile,
+    categories: CategoryBudget[]
+  ) => {
+    persistData({
+      ...appData,
+      profile,
+      categories,
+    });
+  };
+
   const handleSaveCloudConfig = (newCfg: CloudConfig) => {
     saveCloudConfig(newCfg);
     setCloudConfig(newCfg);
@@ -337,8 +348,8 @@ export function App() {
     persistData(imported);
   };
 
-  const handleResetToEmpty = () => {
-    const empty = getEmptyData(appData);
+  const handleResetToEmpty = (currentDraftProfile?: CoupleProfile) => {
+    const empty = getEmptyData(currentDraftProfile || appData.profile);
     persistData(empty);
   };
 
@@ -605,6 +616,7 @@ export function App() {
             syncStatus={syncStatus}
             onUpdateProfile={handleUpdateProfile}
             onUpdateCategories={handleUpdateCategories}
+            onUpdateProfileAndCategories={handleUpdateProfileAndCategories}
             onSaveCloudConfig={handleSaveCloudConfig}
             onManualSyncNow={handleManualSyncNow}
             onExportBackup={handleExportBackup}

@@ -30,11 +30,12 @@ interface BudgetLimitsAndCloudProps {
   syncStatus: string;
   onUpdateProfile: (profile: CoupleProfile) => void;
   onUpdateCategories: (categories: CategoryBudget[]) => void;
+  onUpdateProfileAndCategories: (profile: CoupleProfile, categories: CategoryBudget[]) => void;
   onSaveCloudConfig: (config: CloudConfig) => void;
   onManualSyncNow: () => void;
   onExportBackup: () => void;
   onImportBackup: (data: AppStateData) => void;
-  onResetToEmpty: () => void;
+  onResetToEmpty: (currentDraftProfile: CoupleProfile) => void;
   onRestoreDemoData: () => void;
 }
 
@@ -54,6 +55,7 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
   syncStatus,
   onUpdateProfile,
   onUpdateCategories,
+  onUpdateProfileAndCategories,
   onSaveCloudConfig,
   onManualSyncNow,
   onExportBackup,
@@ -85,8 +87,7 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
 
   const handleSaveProfileAndBudgets = (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateProfile(localProfile);
-    onUpdateCategories(localCategories);
+    onUpdateProfileAndCategories(localProfile, localCategories);
     setSavedBanner(true);
     setTimeout(() => setSavedBanner(false), 3000);
   };
@@ -547,15 +548,17 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
                 onClick={() => {
                   if (
                     window.confirm(
-                      'Deseja apagar os lançamentos e metas de demonstração para começar do zero com os dados reais de vocês? (Seus nomes, categorias e modelos de contas fixas serão mantidos)'
+                      'Deseja ZERAR TUDO de todas as abas (Extrato, Contas Fixas, Parcelas, Metas, Renda e Limites) para começar 100% do zero? Seus nomes digitados acima serão mantidos!'
                     )
                   ) {
-                    onResetToEmpty();
+                    onResetToEmpty(localProfile);
+                    setSavedBanner(true);
+                    setTimeout(() => setSavedBanner(false), 3000);
                   }
                 }}
                 className="w-full py-2.5 px-4 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-bold transition flex items-center justify-center gap-2"
               >
-                <Trash2 className="w-4 h-4" /> Zerar Lançamentos de Exemplo (Começar Real)
+                <Trash2 className="w-4 h-4" /> Zerar Tudo de Todas as Abas (Começar do Zero)
               </button>
 
               <button

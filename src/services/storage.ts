@@ -727,11 +727,23 @@ export function saveLocalData(data: AppStateData): void {
   }
 }
 
-export function getEmptyData(keepProfileAndCategories?: AppStateData): AppStateData {
+export function getEmptyData(keepProfile?: CoupleProfile): AppStateData {
+  const zeroedCategories = DEFAULT_CATEGORIES.map((c) => ({
+    ...c,
+    monthlyLimit: 0,
+  }));
+
   return {
-    profile: keepProfileAndCategories?.profile ?? DEFAULT_PROFILE,
-    categories: keepProfileAndCategories?.categories ?? DEFAULT_CATEGORIES,
-    fixedBills: keepProfileAndCategories?.fixedBills ?? DEFAULT_FIXED_BILLS,
+    profile: {
+      partner1Name: keepProfile?.partner1Name || 'Renato',
+      partner2Name: keepProfile?.partner2Name || 'Esposa',
+      coupleLabel: keepProfile?.coupleLabel || 'Casal / Casa',
+      monthlyIncomeTarget: 0,
+      superfluousWarningPercent: keepProfile?.superfluousWarningPercent || 25,
+      accessPin: keepProfile?.accessPin || '25102020',
+    },
+    categories: zeroedCategories,
+    fixedBills: [],
     transactions: [],
     goals: [],
     updatedAt: new Date().toISOString(),
