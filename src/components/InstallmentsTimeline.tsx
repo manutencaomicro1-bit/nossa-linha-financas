@@ -6,7 +6,6 @@ import {
   Sparkles,
   CheckCircle2,
   Plus,
-  TrendingDown,
 } from 'lucide-react';
 import {
   CategoryBudget,
@@ -25,6 +24,7 @@ interface InstallmentsTimelineProps {
   categories: CategoryBudget[];
   profile: CoupleProfile;
   selectedMonth: string;
+  onSelectMonth?: (monthKey: string) => void;
   onOpenNewTx: () => void;
 }
 
@@ -33,6 +33,7 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
   categories,
   profile,
   selectedMonth,
+  onSelectMonth,
   onOpenNewTx,
 }) => {
   // Build next 8 months projection starting at selectedMonth
@@ -47,6 +48,12 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
 
   const projection = monthsWindow.map((mKey) => {
     const mTxs = transactions.filter((t) => t.monthKey === mKey && t.type === 'expense');
+
+    // All credit card expenses in that month (1x invoice + installments)
+    const creditCardOnly = mTxs.filter((t) => t.paymentMethod === 'credit_card');
+    const creditCardSum = creditCardOnly.reduce((a, b) => a + b.amount, 0);
+
+    // Multi-month installments
     const installmentsOnly = mTxs.filter(
       (t) => t.installmentTotal && t.installmentTotal > 1
     );
@@ -54,37 +61,38 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
 
     // Cards breakdown
     const byCard: Record<string, number> = {};
-    mTxs
-      .filter((t) => t.paymentMethod === 'credit_card')
-      .forEach((t) => {
-        const card = t.cardName || 'Cartão';
-        byCard[card] = (byCard[card] || 0) + t.amount;
-      });
+    creditCardOnly.forEach((t) => {
+      const card = t.cardName || 'Cartão';
+      byCard[card] = (byCard[card] || 0) + t.amount;
+    });
 
     return {
       monthKey: mKey,
       shortLabel: formatShortMonthLabel(mKey),
       fullLabel: formatMonthLabel(mKey),
+      creditCardSum,
+      creditCardCount: creditCardOnly.length,
+      creditCardList: creditCardOnly,
       installmentSum,
       installmentCount: installmentsOnly.length,
       installmentsList: installmentsOnly,
-      totalCommitted: installmentSum + currentFixedExpenses,
+      totalCommitted: creditCardSum + currentFixedExpenses,
       byCard,
     };
   });
 
-  const maxInstallmentSum = Math.max(
-    ...projection.map((p) => p.installmentSum),
+  const maxCardSum = Math.max(
+    ...projection.map((p) => p.creditCardSum),
     1000
   );
 
-  // Active installments in selectedMonth
-  const activeInstallmentsThisMonth = projection[0]?.installmentsList || [];
+  // Active credit card items in selectedMonth
+  const activeCardItemsThisMonth = projection[0]?.creditCardList || [];
 
   // Calculate how much frees up next month and in 2 months
-  const currentInstSum = projection[0]?.installmentSum || 0;
-  const nextMonthFreed = Math.max(0, currentInstSum - (projection[1]?.installmentSum || 0));
-  const twoMonthsFreed = Math.max(0, currentInstSum - (projection[2]?.installmentSum || 0));
+  const currentCardSum = projection[0]?.creditCardSum || 0;
+  const nextMonthFreed = Math.max(0, currentCardSum - (projection[1]?.creditCardSum || 0));
+  const twoMonthsFreed = Math.max(0, currentCardSum - (projection[2]?.creditCardSum || 0));
 
   // Cards summary for current selectedMonth
   const currentCards = projection[0]?.byCard || {};
@@ -103,7 +111,7 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
                 Controle de Cartões & Comprometimento Futuro
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Veja quanto da renda dos próximos meses já está comprometido com parcelas e quando o orçamento vai aliviar
+                Veja as faturas e parcelas nos próximos 8 meses (clique em qualquer barra de mês para inspecionar a fatura daquele mês)
               </p>
             </div>
           </div>
@@ -112,39 +120,49 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
             onClick={onOpenNewTx}
             className="self-start sm:self-center inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-500 hover:bg-violet-400 text-white font-semibold text-xs shadow-lg shadow-violet-500/20 transition"
           >
-            <Plus className="w-4 h-4" /> Lançar Compra Parcelada
+            <Plus className="w-4 h-4" /> Lançar Compra / Fatura no Cartão
           </button>
         </div>
 
-        {/* 3 KPIs de Parcelas */}
+        {/* 3 KPIs de Cartão & Parcelas */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
           <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
-            <span className="text-xs text-slate-400">Parcelas Ativas Neste Mês</span>
+            <span className="text-xs text-slate-400">
+              Total em Cartões em {projection[0]?.shortLabel}
+            </span>
             <div className="text-2xl font-extrabold text-violet-300 mt-1">
-              {formatBRL(currentInstSum)}
+              {formatBRL(currentCardSum)}
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              Distribuídas em {activeInstallmentsThisMonth.length} compra(s) parcelada(s)
+              Soma de {activeCardItemsThisMonth.length} lançamento(s) na fatura deste mês
             </p>
           </div>
 
           <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
-            <span className="text-xs text-slate-400">Alívio no Próximo Mês</span>
+            <span className="text-xs text-slate-400">
+              Fatura Prevista para {projection[1]?.shortLabel}
+            </span>
             <div className="text-2xl font-extrabold text-emerald-300 mt-1">
-              + {formatBRL(nextMonthFreed)}/mês
+              {formatBRL(projection[1]?.creditCardSum || 0)}
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              Valor que deixa de ser cobrado em {projection[1]?.shortLabel}
+              {nextMonthFreed > 0
+                ? `Alívio de +${formatBRL(nextMonthFreed)} em relação a este mês`
+                : `${projection[1]?.creditCardCount || 0} lançamento(s) agendados p/ ${projection[1]?.shortLabel}`}
             </p>
           </div>
 
           <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
-            <span className="text-xs text-slate-400">Alívio Acumulado em 60 Dias</span>
+            <span className="text-xs text-slate-400">
+              Fatura Prevista para {projection[2]?.shortLabel}
+            </span>
             <div className="text-2xl font-extrabold text-teal-300 mt-1">
-              + {formatBRL(twoMonthsFreed)}/mês
+              {formatBRL(projection[2]?.creditCardSum || 0)}
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              Folga aberta no orçamento até {projection[2]?.shortLabel}
+              {twoMonthsFreed > 0
+                ? `Folga de +${formatBRL(twoMonthsFreed)}/mês aberta até ${projection[2]?.shortLabel}`
+                : `${projection[2]?.creditCardCount || 0} lançamento(s) agendados`}
             </p>
           </div>
         </div>
@@ -156,10 +174,10 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
           <div>
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Calendar className="w-4 h-4 text-violet-400" />
-              Curva de Descomprometimento (Próximos 8 Meses)
+              Curva de Faturas & Parcelamentos (Próximos 8 Meses)
             </h3>
             <p className="text-xs text-slate-400">
-              Quanto menor a barra, mais dinheiro livre vocês terão naquele mês para novas conquistas
+              Mostra o total de faturas e parcelas agendadas para cada mês. Clique em um mês para navegar até ele!
             </p>
           </div>
         </div>
@@ -167,24 +185,26 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 items-end pt-4">
           {projection.map((item, idx) => {
             const heightPercent =
-              maxInstallmentSum > 0
-                ? Math.max(10, (item.installmentSum / maxInstallmentSum) * 100)
+              maxCardSum > 0
+                ? Math.max(10, (item.creditCardSum / maxCardSum) * 100)
                 : 10;
 
             return (
-              <div
+              <button
+                type="button"
                 key={item.monthKey}
-                className={`flex flex-col items-center p-3 rounded-xl border ${
+                onClick={() => onSelectMonth && onSelectMonth(item.monthKey)}
+                className={`flex flex-col items-center p-3 rounded-xl border text-left transition ${
                   idx === 0
-                    ? 'bg-violet-950/25 border-violet-500/40'
-                    : 'bg-slate-950/60 border-slate-800/80'
+                    ? 'bg-violet-950/25 border-violet-500/50 shadow-lg shadow-violet-500/10'
+                    : 'bg-slate-950/60 border-slate-800/80 hover:border-violet-500/40'
                 }`}
               >
                 <span className="text-[11px] font-bold text-white mb-1">
-                  {formatBRL(item.installmentSum)}
+                  {formatBRL(item.creditCardSum)}
                 </span>
                 <span className="text-[10px] text-slate-400 mb-3">
-                  {item.installmentCount} parc.
+                  {item.creditCardCount} item(ns)
                 </span>
 
                 <div className="w-full h-32 bg-slate-900 rounded-lg flex items-end p-1 border border-slate-800/70">
@@ -192,11 +212,11 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
                     className={`w-full rounded-md transition-all duration-500 ${
                       idx === 0
                         ? 'bg-gradient-to-t from-violet-600 to-fuchsia-400'
-                        : item.installmentSum === 0
+                        : item.creditCardSum === 0
                         ? 'bg-emerald-500/30'
                         : 'bg-gradient-to-t from-indigo-600/80 to-violet-400/80'
                     }`}
-                    style={{ height: `${item.installmentSum === 0 ? 6 : heightPercent}%` }}
+                    style={{ height: `${item.creditCardSum === 0 ? 6 : heightPercent}%` }}
                   />
                 </div>
 
@@ -207,36 +227,37 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
                 >
                   {item.shortLabel}
                 </span>
-              </div>
+              </button>
             );
           })}
         </div>
       </div>
 
-      {/* Lista de Parcelamentos Ativos + Resumo por Cartão */}
+      {/* Lista de Itens do Cartão no Mês + Resumo por Cartão */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6">
           <h3 className="text-base font-bold text-white mb-1 flex items-center gap-2">
             <Layers className="w-4 h-4 text-violet-400" />
-            Compras Parceladas Ativas em {formatMonthLabel(selectedMonth)}
+            Lançamentos & Parcelas na Fatura de {formatMonthLabel(selectedMonth)}
           </h3>
           <p className="text-xs text-slate-400 mb-4">
-            Acompanhe quantas parcelas faltam para cada compra sair da fatura
+            Acompanhe todas as compras no cartão e quantas parcelas faltam para cada uma terminar
           </p>
 
-          {activeInstallmentsThisMonth.length === 0 ? (
+          {activeCardItemsThisMonth.length === 0 ? (
             <div className="p-8 text-center bg-slate-950/50 rounded-xl border border-slate-800">
               <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
               <p className="text-sm font-semibold text-white">
-                Nenhuma parcela ativa neste mês!
+                Nenhuma fatura ou parcela ativa em {formatMonthLabel(selectedMonth)}!
               </p>
               <p className="text-xs text-slate-400 mt-1">
-                A renda do casal está 100% livre de parcelamentos neste período.
+                Se você agendou a fatura para o próximo mês, clique na barra de{' '}
+                <strong>{projection[1]?.shortLabel}</strong> acima para visualizá-la.
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {activeInstallmentsThisMonth.map((inst) => {
+              {activeCardItemsThisMonth.map((inst) => {
                 const current = inst.installmentCurrent || 1;
                 const total = inst.installmentTotal || 1;
                 const remaining = total - current;
@@ -255,7 +276,7 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
                             {inst.description}
                           </span>
                           <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30">
-                            Parcela {current} de {total}
+                            {total > 1 ? `Parcela ${current} de ${total}` : 'Fatura do Mês (1x)'}
                           </span>
                         </div>
                         <div className="text-xs text-slate-400 mt-0.5">
@@ -271,12 +292,12 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
 
                       <div className="text-right">
                         <div className="text-sm font-extrabold text-white">
-                          {formatBRL(inst.amount)}/mês
+                          {formatBRL(inst.amount)}
                         </div>
                         <div className="text-[11px] text-slate-400">
                           {remaining === 0 ? (
                             <span className="text-emerald-400 font-semibold">
-                              🎉 Última parcela neste mês!
+                              🎉 Quitado neste mês!
                             </span>
                           ) : (
                             `Restam ${remaining}x (${formatBRL(remaining * inst.amount)})`
@@ -301,7 +322,7 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
         {/* Fatura Total por Cartão no Mês */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
           <h3 className="text-base font-bold text-white mb-1">
-            Faturas por Cartão no Mês
+            Faturas por Cartão em {formatMonthLabel(selectedMonth)}
           </h3>
           <p className="text-xs text-slate-400 mb-4">
             Soma de compras à vista no crédito + parcelas do mês
@@ -309,7 +330,7 @@ export const InstallmentsTimeline: React.FC<InstallmentsTimelineProps> = ({
 
           {Object.keys(currentCards).length === 0 ? (
             <p className="text-xs text-slate-400 py-6 text-center">
-              Nenhum gasto no cartão de crédito registrado neste mês.
+              Nenhum gasto no cartão de crédito registrado para a fatura de {formatMonthLabel(selectedMonth)}.
             </p>
           ) : (
             <div className="space-y-3">

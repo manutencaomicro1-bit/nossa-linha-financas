@@ -10,6 +10,9 @@ import {
   Plus,
   Layers,
   Filter,
+  Pencil,
+  X,
+  Calendar,
 } from 'lucide-react';
 import {
   CategoryBudget,
@@ -18,7 +21,11 @@ import {
   OwnerTag,
   Transaction,
 } from '../types/finance';
-import { formatBRL } from '../services/storage';
+import {
+  addMonthsToMonthKey,
+  formatBRL,
+  formatMonthLabel,
+} from '../services/storage';
 import { CategoryIcon } from './CategoryIcon';
 
 interface TransactionsProps {
@@ -26,6 +33,7 @@ interface TransactionsProps {
   categories: CategoryBudget[];
   profile: CoupleProfile;
   selectedMonth: string;
+  onUpdateTransaction: (updatedTx: Transaction) => void;
   onDeleteTransaction: (tx: Transaction, deleteAllInstallments: boolean) => void;
   onOpenNewTx: () => void;
 }
@@ -35,6 +43,7 @@ export const Transactions: React.FC<TransactionsProps> = ({
   categories,
   profile,
   selectedMonth,
+  onUpdateTransaction,
   onDeleteTransaction,
   onOpenNewTx,
 }) => {
@@ -42,6 +51,15 @@ export const Transactions: React.FC<TransactionsProps> = ({
   const [ownerFilter, setOwnerFilter] = useState<'all' | OwnerTag>('all');
   const [natureFilter, setNatureFilter] = useState<'all' | ExpenseNature>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+
+  // Inline editing state
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
+  const [editDesc, setEditDesc] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editMonthKey, setEditMonthKey] = useState('');
+  const [editCategoryId, setEditCategoryId] = useState('');
+  const [editOwner, setEditOwner] = useState<OwnerTag>('couple');
 
   const monthTxs = transactions
     .filter((t) => t.monthKey === selectedMonth)
@@ -55,6 +73,30 @@ export const Transactions: React.FC<TransactionsProps> = ({
         : true
     )
     .sort((a, b) => b.date.localeCompare(a.date));
+
+  const startEditingTx = (tx: Transaction) => {
+    setEditingTxId(tx.id);
+    setEditDesc(tx.description);
+    setEditAmount(String(tx.amount));
+    setEditDate(tx.date);
+    setEditMonthKey(tx.monthKey);
+    setEditCategoryId(tx.categoryId);
+    setEditOwner(tx.owner);
+  };
+
+  const saveEditTx = (tx: Transaction) => {
+    const val = parseFloat(editAmount.replace(',', '.')) || tx.amount;
+    onUpdateTransaction({
+      ...tx,
+      description: editDesc.trim() || tx.description,
+      amount: Number(val.toFixed(2)),
+      date: editDate || tx.date,
+      monthKey: editMonthKey || tx.monthKey,
+      categoryId: editCategoryId || tx.categoryId,
+      owner: editOwner,
+    });
+    setEditingTxId(null);
+  };
 
   const getOwnerBadge = (owner: OwnerTag) => {
     if (owner === 'partner1') {
@@ -104,6 +146,10 @@ export const Transactions: React.FC<TransactionsProps> = ({
     .filter((t) => t.type === 'expense')
     .reduce((a, b) => a + b.amount, 0);
 
+  const monthOptionsForMove = [-1, 0, 1, 2, 3].map((off) =>
+    addMonthsToMonthKey(selectedMonth, off)
+  );
+
   return (
     <div className="space-y-5">
       {/* Barra de Filtros e Busca */}
@@ -112,7 +158,7 @@ export const Transactions: React.FC<TransactionsProps> = ({
           <div>
             <h2 className="text-lg font-bold text-white">Extrato Detalhado do Mês</h2>
             <p className="text-xs text-slate-400">
-              Filtre por pessoa, categoria ou veja apenas os gastos supérfluos para encontrar excessos
+              Filtre por pessoa, categoria ou clique no ícone de lápis (✏️) para editar um lançamento ou mudar o mês da fatura
             </p>
           </div>
           <button
@@ -207,6 +253,129 @@ export const Transactions: React.FC<TransactionsProps> = ({
             {monthTxs.map((tx) => {
               const cat = categories.find((c) => c.id === tx.categoryId);
               const isInstallment = tx.installmentTotal && tx.installmentTotal > 1;
+              const isEditingThis = editingTxId === tx.id;
+
+              if (isEditingThis) {
+                return (
+                  <div
+                    key={tx.id}
+                    className="p-4 sm:px-6 bg-slate-950/90 border-l-4 border-emerald-500 space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-300">
+                        Editando Lançamento / Mês de Competência (Fatura)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setEditingTxId(null)}
+                        className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
+                      >
+                        <X className="w-3.5 h-3.5" /> Cancelar
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          Descrição
+                        </label>
+                        <input
+                          type="text"
+                          value={editDesc}
+                          onChange={(e) => setEditDesc(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          Valor (R$)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editAmount}
+                          onChange={(e) => setEditAmount(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-violet-300 font-bold mb-1 flex items-center gap-1">
+                          <Calendar className="w-3 h-3" /> Mês da Fatura / Extrato
+                        </label>
+                        <select
+                          value={editMonthKey}
+                          onChange={(e) => setEditMonthKey(e.target.value)}
+                          className="w-full bg-slate-900 border border-violet-500 rounded-lg px-2.5 py-1.5 text-xs font-bold text-violet-200"
+                        >
+                          {monthOptionsForMove.map((mKey) => (
+                            <option key={mKey} value={mKey}>
+                              {formatMonthLabel(mKey)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => saveEditTx(tx)}
+                          className="w-full py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition"
+                        >
+                          Salvar Alteração
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          Data da Compra
+                        </label>
+                        <input
+                          type="date"
+                          value={editDate}
+                          onChange={(e) => setEditDate(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          Categoria
+                        </label>
+                        <select
+                          value={editCategoryId}
+                          onChange={(e) => setEditCategoryId(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                        >
+                          {categories.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          Responsável
+                        </label>
+                        <select
+                          value={editOwner}
+                          onChange={(e) => setEditOwner(e.target.value as OwnerTag)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                        >
+                          <option value="couple">🏠 {profile.coupleLabel}</option>
+                          <option value="partner1">👤 {profile.partner1Name}</option>
+                          <option value="partner2">👤 {profile.partner2Name}</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
 
               return (
                 <div
@@ -241,7 +410,7 @@ export const Transactions: React.FC<TransactionsProps> = ({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                        <span>{tx.date.split('-').reverse().join('/')}</span>
+                        <span>Compra: {tx.date.split('-').reverse().join('/')}</span>
                         <span>•</span>
                         <span className="text-slate-300">{cat?.name || 'Geral'}</span>
                         <span>•</span>
@@ -249,7 +418,7 @@ export const Transactions: React.FC<TransactionsProps> = ({
                         {tx.type === 'expense' && getNatureBadge(tx.nature)}
                         {tx.paymentMethod === 'credit_card' ? (
                           <span className="inline-flex items-center gap-1 text-[11px] text-violet-300">
-                            <CreditCard className="w-3 h-3" /> {tx.cardName || 'Cartão'}
+                            <CreditCard className="w-3 h-3" /> {tx.cardName || 'Cartão'} (Fatura {formatMonthLabel(tx.monthKey)})
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
@@ -260,7 +429,7 @@ export const Transactions: React.FC<TransactionsProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/60">
+                  <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/60">
                     <div className="text-left sm:text-right">
                       <div
                         className={`text-base font-extrabold ${
@@ -276,22 +445,33 @@ export const Transactions: React.FC<TransactionsProps> = ({
                       )}
                     </div>
 
-                    <button
-                      onClick={() => {
-                        if (isInstallment) {
-                          const all = window.confirm(
-                            'Deseja excluir TODAS as parcelas desta compra em todos os meses? (Clique em Cancelar para excluir apenas a parcela deste mês)'
-                          );
-                          onDeleteTransaction(tx, all);
-                        } else {
-                          onDeleteTransaction(tx, false);
-                        }
-                      }}
-                      title="Excluir lançamento"
-                      className="p-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => startEditingTx(tx)}
+                        title="Editar lançamento ou mover para fatura de outro mês"
+                        className="p-2 rounded-lg text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (isInstallment) {
+                            const all = window.confirm(
+                              'Deseja excluir TODAS as parcelas desta compra em todos os meses? (Clique em Cancelar para excluir apenas a parcela deste mês)'
+                            );
+                            onDeleteTransaction(tx, all);
+                          } else {
+                            onDeleteTransaction(tx, false);
+                          }
+                        }}
+                        title="Excluir lançamento"
+                        className="p-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

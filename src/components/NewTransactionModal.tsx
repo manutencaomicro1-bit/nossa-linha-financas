@@ -20,7 +20,11 @@ import {
   Transaction,
   TransactionType,
 } from '../types/finance';
-import { addMonthsToMonthKey, formatBRL } from '../services/storage';
+import {
+  addMonthsToMonthKey,
+  formatBRL,
+  formatMonthLabel,
+} from '../services/storage';
 
 interface NewTransactionModalProps {
   isOpen: boolean;
@@ -50,12 +54,26 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('credit_card');
   const [installments, setInstallments] = useState<number>(1);
   const [amountMode, setAmountMode] = useState<'total' | 'parcela'>('total');
-  const [cardName, setCardName] = useState('Nubank');
+  const [cardName, setCardName] = useState('Itaú');
   const [isRecurring, setIsRecurring] = useState(false);
+
   const [date, setDate] = useState(() => {
     const today = new Date().toISOString().slice(0, 10);
     return today.startsWith(selectedMonth) ? today : `${selectedMonth}-10`;
   });
+
+  // Billing month (Mês da Fatura / 1ª Parcela) — allows buying in October and billing in November!
+  const [billingMonth, setBillingMonth] = useState<string>(selectedMonth);
+
+  useEffect(() => {
+    if (isOpen) {
+      const today = new Date().toISOString().slice(0, 10);
+      const initialDate = today.startsWith(selectedMonth) ? today : `${selectedMonth}-10`;
+      setDate(initialDate);
+      setBillingMonth(selectedMonth);
+      setOwner(defaultOwner);
+    }
+  }, [isOpen, selectedMonth, defaultOwner]);
 
   useEffect(() => {
     const cat = categories.find((c) => c.id === categoryId);
@@ -81,11 +99,22 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
       : parsedValue * installments
     : parsedValue;
 
+  // Options of months for the credit card invoice selector (-1 to +6 months from purchase date)
+  const purchaseMonthKey = date.slice(0, 7);
+  const invoiceMonthOptions = [-1, 0, 1, 2, 3].map((offset) =>
+    addMonthsToMonthKey(purchaseMonthKey, offset)
+  );
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!description.trim() || parsedValue <= 0) return;
 
-    const baseMonth = date.slice(0, 7);
+    // If credit card, use the chosen billingMonth; otherwise use the purchase date's month
+    const baseMonth =
+      type === 'expense' && paymentMethod === 'credit_card'
+        ? billingMonth
+        : date.slice(0, 7);
+
     const created: Transaction[] = [];
 
     if (isInstallment) {
@@ -141,7 +170,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
           <div>
             <h2 className="text-lg font-bold text-white">Novo Lançamento</h2>
             <p className="text-xs text-slate-400">
-              Registre um gasto à vista, parcelado no cartão ou uma receita do casal
+              Registre um gasto à vista, compra no cartão (escolhendo o mês da fatura) ou receita
             </p>
           </div>
           <button
@@ -189,7 +218,9 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                 type="text"
                 required
                 placeholder={
-                  type === 'expense' ? 'Ex: iFood Sexta, Supermercado, Sofá...' : 'Ex: Salário, Freelance...'
+                  type === 'expense'
+                    ? 'Ex: Fatura Itaú, iFood, Supermercado...'
+                    : 'Ex: Salário, Renda Extra...'
                 }
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -213,7 +244,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
             </div>
           </div>
 
-          {/* Quem realizou (Renato, Esposa, Casal) */}
+          {/* Quem realizou */}
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1.5">
               {type === 'expense' ? 'Quem fez o gasto?' : 'De quem é a receita?'}
@@ -260,7 +291,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
 
           {type === 'expense' && (
             <>
-              {/* Categoria e Data */}
+              {/* Categoria e Data da Compra */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">
@@ -282,14 +313,15 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">
                     Data da Compra
                   </label>
-                  <div className="relative">
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => {
+                      const nextDate = e.target.value;
+                      setDate(nextDate);
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  />
                 </div>
               </div>
 
@@ -341,7 +373,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                 </div>
               </div>
 
-              {/* Forma de Pagamento & Parcelamento */}
+              {/* Forma de Pagamento, Mês da Fatura & Parcelamento */}
               <div className="space-y-3 bg-slate-950/70 p-4 rounded-xl border border-slate-800/80">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-slate-400">Forma de Pagamento</span>
@@ -380,6 +412,38 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
 
                 {paymentMethod === 'credit_card' && (
                   <div className="pt-2 space-y-3 border-t border-slate-800/80">
+                    {/* Seletor de Mês da Fatura */}
+                    <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-3">
+                      <label className="block text-[11px] font-bold text-violet-200 mb-1 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-violet-400" />
+                        Cai na Fatura de qual Mês? (1ª Parcela / Vencimento da Fatura)
+                      </label>
+                      <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+                        {[
+                          purchaseMonthKey,
+                          addMonthsToMonthKey(purchaseMonthKey, 1),
+                          addMonthsToMonthKey(purchaseMonthKey, 2),
+                        ].map((mKey, idx) => (
+                          <button
+                            key={mKey}
+                            type="button"
+                            onClick={() => setBillingMonth(mKey)}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition ${
+                              billingMonth === mKey
+                                ? 'bg-violet-500 text-white border-violet-400 shadow'
+                                : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            {idx === 0
+                              ? `${formatMonthLabel(mKey)} (Atual)`
+                              : idx === 1
+                              ? `${formatMonthLabel(mKey)} (Próx.)`
+                              : formatMonthLabel(mKey)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[11px] text-slate-400 mb-1">
@@ -389,7 +453,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                           type="text"
                           value={cardName}
                           onChange={(e) => setCardName(e.target.value)}
-                          placeholder="Ex: Nubank, Itaú..."
+                          placeholder="Ex: Itaú, Nubank..."
                           className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white"
                         />
                       </div>
@@ -402,10 +466,10 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                           onChange={(e) => setInstallments(Number(e.target.value))}
                           className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white"
                         >
-                          <option value={1}>1x à vista no cartão</option>
+                          <option value={1}>1x na fatura de {formatMonthLabel(billingMonth)}</option>
                           {[2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 24].map((n) => (
                             <option key={n} value={n}>
-                              Parcelado em {n}x
+                              Parcelado em {n}x (início {formatMonthLabel(billingMonth)})
                             </option>
                           ))}
                         </select>
@@ -446,9 +510,9 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({
                         </div>
                         {parsedValue > 0 && (
                           <p className="text-[11px] text-violet-300">
-                            Serão criadas automaticamente <strong>{installments} parcelas</strong> de{' '}
-                            <strong>{formatBRL(monthlyAmount)}/mês</strong> (Total:{' '}
-                            {formatBRL(totalPurchaseAmount)}) nos próximos meses.
+                            Serão criadas <strong>{installments} parcelas</strong> de{' '}
+                            <strong>{formatBRL(monthlyAmount)}/mês</strong> começando na fatura de{' '}
+                            <strong>{formatMonthLabel(billingMonth)}</strong>.
                           </p>
                         )}
                       </div>

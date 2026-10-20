@@ -247,6 +247,15 @@ export function App() {
     });
   };
 
+  const handleUpdateFixedBillTemplate = (updatedBill: FixedBillTemplate) => {
+    persistData({
+      ...appData,
+      fixedBills: (appData.fixedBills || []).map((b) =>
+        b.id === updatedBill.id ? updatedBill : b
+      ),
+    });
+  };
+
   const handleDeleteFixedBillTemplate = (billId: string) => {
     persistData({
       ...appData,
@@ -259,6 +268,15 @@ export function App() {
     persistData({
       ...appData,
       transactions: [...newTxs, ...appData.transactions],
+    });
+  };
+
+  const handleUpdateTransaction = (updatedTx: Transaction) => {
+    persistData({
+      ...appData,
+      transactions: appData.transactions.map((t) =>
+        t.id === updatedTx.id ? updatedTx : t
+      ),
     });
   };
 
@@ -570,6 +588,7 @@ export function App() {
             onPayFixedBill={handlePayFixedBill}
             onUnpayFixedBill={handleUnpayFixedBill}
             onAddFixedBillTemplate={handleAddFixedBillTemplate}
+            onUpdateFixedBillTemplate={handleUpdateFixedBillTemplate}
             onDeleteFixedBillTemplate={handleDeleteFixedBillTemplate}
             onLaunchAllPendingBills={handleLaunchAllPendingBills}
           />
@@ -581,6 +600,7 @@ export function App() {
             categories={appData.categories}
             profile={appData.profile}
             selectedMonth={selectedMonth}
+            onUpdateTransaction={handleUpdateTransaction}
             onDeleteTransaction={handleDeleteTransaction}
             onOpenNewTx={() => setIsNewTxOpen(true)}
           />
@@ -592,6 +612,7 @@ export function App() {
             categories={appData.categories}
             profile={appData.profile}
             selectedMonth={selectedMonth}
+            onSelectMonth={setSelectedMonth}
             onOpenNewTx={() => setIsNewTxOpen(true)}
           />
         )}

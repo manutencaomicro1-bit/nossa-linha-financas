@@ -5,11 +5,10 @@ import {
   Plus,
   Trash2,
   Home,
-  FileText,
   Sparkles,
   Check,
-  Calendar,
-  AlertCircle,
+  Pencil,
+  X,
 } from 'lucide-react';
 import {
   CategoryBudget,
@@ -32,6 +31,7 @@ interface FixedBillsChecklistProps {
   onPayFixedBill: (bill: FixedBillTemplate, actualAmount: number) => void;
   onUnpayFixedBill: (txId: string) => void;
   onAddFixedBillTemplate: (bill: FixedBillTemplate) => void;
+  onUpdateFixedBillTemplate: (bill: FixedBillTemplate) => void;
   onDeleteFixedBillTemplate: (billId: string) => void;
   onLaunchAllPendingBills: () => void;
 }
@@ -45,11 +45,19 @@ export const FixedBillsChecklist: React.FC<FixedBillsChecklistProps> = ({
   onPayFixedBill,
   onUnpayFixedBill,
   onAddFixedBillTemplate,
+  onUpdateFixedBillTemplate,
   onDeleteFixedBillTemplate,
   onLaunchAllPendingBills,
 }) => {
-  const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
   const [showNewForm, setShowNewForm] = useState(false);
+
+  // Edit mode state for an existing FixedBillTemplate
+  const [editingBillId, setEditingBillId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editCategoryId, setEditCategoryId] = useState('');
+  const [editExpectedAmount, setEditExpectedAmount] = useState('');
+  const [editDueDay, setEditDueDay] = useState('');
+  const [editOwner, setEditOwner] = useState<OwnerTag>('couple');
 
   // New Fixed Bill state
   const [newName, setNewName] = useState('');
@@ -64,7 +72,6 @@ export const FixedBillsChecklist: React.FC<FixedBillsChecklistProps> = ({
     (t) => t.monthKey === selectedMonth && t.type === 'expense'
   );
 
-  // Match each fixedBill with whether it's already launched/paid in selectedMonth
   const billsWithStatus = fixedBills
     .filter((b) => b.active)
     .sort((a, b) => a.dueDay - b.dueDay)
@@ -108,6 +115,29 @@ export const FixedBillsChecklist: React.FC<FixedBillsChecklistProps> = ({
     setNewName('');
     setNewExpectedAmount('');
     setShowNewForm(false);
+  };
+
+  const startEditing = (bill: FixedBillTemplate) => {
+    setEditingBillId(bill.id);
+    setEditName(bill.name);
+    setEditCategoryId(bill.categoryId);
+    setEditExpectedAmount(String(bill.expectedAmount));
+    setEditDueDay(String(bill.dueDay));
+    setEditOwner(bill.owner);
+  };
+
+  const saveEdit = (bill: FixedBillTemplate) => {
+    const val = parseFloat(editExpectedAmount.replace(',', '.')) || bill.expectedAmount;
+    const day = Math.min(31, Math.max(1, Number(editDueDay) || bill.dueDay));
+    onUpdateFixedBillTemplate({
+      ...bill,
+      name: editName.trim() || bill.name,
+      categoryId: editCategoryId || bill.categoryId,
+      expectedAmount: val,
+      dueDay: day,
+      owner: editOwner,
+    });
+    setEditingBillId(null);
   };
 
   return (
@@ -162,7 +192,9 @@ export const FixedBillsChecklist: React.FC<FixedBillsChecklistProps> = ({
               {formatBRL(totalExpected)}
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              {((totalExpected / (profile.monthlyIncomeTarget || 1)) * 100).toFixed(0)}% da renda base do casal
+              {profile.monthlyIncomeTarget > 0
+                ? `${((totalExpected / profile.monthlyIncomeTarget) * 100).toFixed(0)}% da renda base do casal`
+                : 'Compromissos mensais cadastrados'}
             </p>
           </div>
 
@@ -182,13 +214,13 @@ export const FixedBillsChecklist: React.FC<FixedBillsChecklistProps> = ({
               {formatBRL(totalPending)}
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              Confirme o valor real abaixo quando a fatura chegar
+              Clique no ícone de lápis ✏️ ao lado da conta se precisar editar dia ou valor
             </p>
           </div>
         </div>
       </div>
 
-      {/* Formulário para Adicionar Nova Conta Fixa (Parcela, Condomínio, Seguro, Escola, etc.) */}
+      {/* Formulário para Adicionar Nova Conta Fixa */}
       {showNewForm && (
         <form
           onSubmit={handleCreateTemplate}
@@ -216,7 +248,7 @@ export const FixedBillsChecklist: React.FC<FixedBillsChecklistProps> = ({
               <input
                 type="text"
                 required
-                placeholder="Ex: Parcela do Apto, Condomínio, Luz, Financiamento Carro, Gás..."
+                placeholder="Ex: Financiamento do Carro, Condomínio, Luz..."
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white"
@@ -225,7 +257,7 @@ export const FixedBillsChecklist: React.FC<FixedBillsChecklistProps> = ({
 
             <div>
               <label className="block text-xs text-slate-400 mb-1">
-                Valor Médio / Parcela (R$)
+                Valor da Conta / Parcela (R$)
               </label>
               <input
                 type="number"
@@ -322,151 +354,264 @@ export const FixedBillsChecklist: React.FC<FixedBillsChecklistProps> = ({
               Checklist de Contas & Financiamentos ({formatMonthLabel(selectedMonth)})
             </h3>
             <p className="text-xs text-slate-400">
-              Para contas variáveis (como Conta de Luz ou Água), você pode ajustar o valor exato do mês antes de clicar em "Confirmar Pagamento"
+              Valores travados por segurança. Caso precise corrigir o dia de vencimento, nome ou valor de uma conta, clique no botão <strong>Editar (✏️)</strong>.
             </p>
           </div>
         </div>
 
-        <div className="divide-y divide-slate-800/80">
-          {billsWithStatus.map(({ bill, matchedTx, isPaid }) => {
-            const cat = categories.find((c) => c.id === bill.categoryId);
-            const currentInputVal =
-              customAmounts[bill.id] !== undefined
-                ? customAmounts[bill.id]
-                : String(bill.expectedAmount);
+        {billsWithStatus.length === 0 ? (
+          <div className="p-10 text-center space-y-3">
+            <p className="text-sm text-slate-400">
+              Nenhuma conta fixa cadastrada ainda.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowNewForm(true)}
+              className="px-4 py-2 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-300 text-xs font-bold transition"
+            >
+              + Cadastrar Primeira Conta Fixa
+            </button>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-800/80">
+            {billsWithStatus.map(({ bill, matchedTx, isPaid }) => {
+              const cat = categories.find((c) => c.id === bill.categoryId);
+              const isEditingThis = editingBillId === bill.id;
 
-            return (
-              <div
-                key={bill.id}
-                className={`p-4 sm:px-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition ${
-                  isPaid ? 'bg-emerald-950/10' : 'hover:bg-slate-800/30'
-                }`}
-              >
-                <div className="flex items-start sm:items-center gap-3.5">
+              if (isEditingThis) {
+                return (
                   <div
-                    className="p-2.5 rounded-xl shrink-0"
-                    style={{
-                      backgroundColor: isPaid
-                        ? '#10b98125'
-                        : `${cat?.color || '#6366f1'}20`,
-                      color: isPaid ? '#10b981' : cat?.color || '#818cf8',
-                    }}
+                    key={bill.id}
+                    className="p-4 sm:px-6 bg-slate-950/90 border-l-4 border-indigo-500 space-y-3"
                   >
-                    <CategoryIcon name={cat?.icon || 'FileText'} className="w-5 h-5" />
-                  </div>
-
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`text-sm font-bold ${
-                          isPaid ? 'text-emerald-200' : 'text-white'
-                        }`}
-                      >
-                        {bill.name}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-indigo-300">
+                        Editando Conta Fixa
                       </span>
-                      {isPaid ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                          <Check className="w-3 h-3" /> Pago no Mês
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                          <Clock className="w-3 h-3" /> Vence dia {bill.dueDay}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 mt-1">
-                      <span>{cat?.name || 'Contas Fixas'}</span>
-                      <span>•</span>
-                      <span>
-                        {bill.owner === 'partner1'
-                          ? profile.partner1Name
-                          : bill.owner === 'partner2'
-                          ? profile.partner2Name
-                          : profile.coupleLabel}
-                      </span>
-                      <span>•</span>
-                      <span>Valor Previsto: {formatBRL(bill.expectedAmount)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between lg:justify-end gap-3 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-800/60">
-                  {isPaid && matchedTx ? (
-                    <>
-                      <div className="text-right">
-                        <div className="text-sm font-extrabold text-emerald-400">
-                          Pago: {formatBRL(matchedTx.amount)}
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          Já somado no Radar e Extrato
-                        </div>
-                      </div>
                       <button
                         type="button"
-                        onClick={() => onUnpayFixedBill(matchedTx.id)}
-                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition"
+                        onClick={() => setEditingBillId(null)}
+                        className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
                       >
-                        Desfazer Baixa
+                        <X className="w-3.5 h-3.5" /> Cancelar
                       </button>
-                    </>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <div className="relative">
-                        <span className="text-[11px] text-slate-400 absolute left-3 top-1/2 -translate-y-1/2">
-                          R$
-                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          Nome da Conta
+                        </label>
+                        <input
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          Dia de Vencimento
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={editDueDay}
+                          onChange={(e) => setEditDueDay(e.target.value)}
+                          className="w-full bg-slate-900 border border-indigo-500 rounded-lg px-3 py-1.5 text-xs font-bold text-amber-300"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          Valor Fixo (R$)
+                        </label>
                         <input
                           type="number"
                           step="0.01"
-                          value={currentInputVal}
-                          onChange={(e) =>
-                            setCustomAmounts((prev) => ({
-                              ...prev,
-                              [bill.id]: e.target.value,
-                            }))
-                          }
-                          className="w-28 bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-emerald-500"
-                          title="Ajuste o valor caso a conta tenha vindo diferente neste mês"
+                          value={editExpectedAmount}
+                          onChange={(e) => setEditExpectedAmount(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
                         />
                       </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => saveEdit(bill)}
+                          className="w-full py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition"
+                        >
+                          Salvar Edição
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          Categoria
+                        </label>
+                        <select
+                          value={editCategoryId}
+                          onChange={(e) => setEditCategoryId(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                        >
+                          {categories.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">
+                          Responsável
+                        </label>
+                        <select
+                          value={editOwner}
+                          onChange={(e) => setEditOwner(e.target.value as OwnerTag)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                        >
+                          <option value="couple">🏠 {profile.coupleLabel}</option>
+                          <option value="partner1">👤 {profile.partner1Name}</option>
+                          <option value="partner2">👤 {profile.partner2Name}</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={bill.id}
+                  className={`p-4 sm:px-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition ${
+                    isPaid ? 'bg-emerald-950/10' : 'hover:bg-slate-800/30'
+                  }`}
+                >
+                  <div className="flex items-start sm:items-center gap-3.5">
+                    <div
+                      className="p-2.5 rounded-xl shrink-0"
+                      style={{
+                        backgroundColor: isPaid
+                          ? '#10b98125'
+                          : `${cat?.color || '#6366f1'}20`,
+                        color: isPaid ? '#10b981' : cat?.color || '#818cf8',
+                      }}
+                    >
+                      <CategoryIcon name={cat?.icon || 'FileText'} className="w-5 h-5" />
+                    </div>
+
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`text-sm font-bold ${
+                            isPaid ? 'text-emerald-200' : 'text-white'
+                          }`}
+                        >
+                          {bill.name}
+                        </span>
+                        {isPaid ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            <Check className="w-3 h-3" /> Pago no Mês
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => startEditing(bill)}
+                            title="Clique para editar o dia de vencimento"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition"
+                          >
+                            <Clock className="w-3 h-3" /> Vence dia {bill.dueDay} ✏️
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 mt-1">
+                        <span>{cat?.name || 'Contas Fixas'}</span>
+                        <span>•</span>
+                        <span>
+                          {bill.owner === 'partner1'
+                            ? profile.partner1Name
+                            : bill.owner === 'partner2'
+                            ? profile.partner2Name
+                            : profile.coupleLabel}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between lg:justify-end gap-3 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-800/60">
+                    {isPaid && matchedTx ? (
+                      <>
+                        <div className="text-right">
+                          <div className="text-sm font-extrabold text-emerald-400">
+                            Pago: {formatBRL(matchedTx.amount)}
+                          </div>
+                          <div className="text-[11px] text-slate-400">
+                            Confirmado no extrato
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onUnpayFixedBill(matchedTx.id)}
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition"
+                        >
+                          Desfazer Baixa
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        {/* Valor travado (somente leitura) */}
+                        <div className="px-3.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-sm font-extrabold text-white">
+                          {formatBRL(bill.expectedAmount)}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => onPayFixedBill(bill, bill.expectedAmount)}
+                          className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow shadow-emerald-500/20 transition flex items-center gap-1"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Confirmar Pago
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => startEditing(bill)}
+                        className="p-2 rounded-lg text-slate-400 hover:text-indigo-300 hover:bg-indigo-500/10 transition"
+                        title="Editar dia de vencimento, nome ou valor"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
 
                       <button
                         type="button"
                         onClick={() => {
-                          const val =
-                            parseFloat(currentInputVal.replace(',', '.')) ||
-                            bill.expectedAmount;
-                          onPayFixedBill(bill, val);
+                          if (
+                            window.confirm(
+                              `Remover "${bill.name}" da lista de compromissos fixos mensais?`
+                            )
+                          ) {
+                            onDeleteFixedBillTemplate(bill.id);
+                          }
                         }}
-                        className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow shadow-emerald-500/20 transition flex items-center gap-1"
+                        className="p-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                        title="Excluir conta fixa"
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Confirmar Pago
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Remover "${bill.name}" da lista de compromissos fixos mensais?`
-                        )
-                      ) {
-                        onDeleteFixedBillTemplate(bill.id);
-                      }
-                    }}
-                    className="p-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
-                    title="Excluir conta fixa"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
