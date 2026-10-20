@@ -66,14 +66,19 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
   const [localProfile, setLocalProfile] = useState<CoupleProfile>(profile);
   const [localCategories, setLocalCategories] = useState<CategoryBudget[]>(categories);
   const [localCloud, setLocalCloud] = useState<CloudConfig>(cloudConfig);
+  const [isDirty, setIsDirty] = useState(false);
 
   React.useEffect(() => {
-    setLocalProfile(profile);
-  }, [profile]);
+    if (!isDirty) {
+      setLocalProfile(profile);
+    }
+  }, [profile, isDirty]);
 
   React.useEffect(() => {
-    setLocalCategories(categories);
-  }, [categories]);
+    if (!isDirty) {
+      setLocalCategories(categories);
+    }
+  }, [categories, isDirty]);
 
   React.useEffect(() => {
     setLocalCloud(cloudConfig);
@@ -100,6 +105,7 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
 
   const handleSaveProfileAndBudgets = (e: React.FormEvent) => {
     e.preventDefault();
+    setIsDirty(false);
     onUpdateProfileAndCategories(localProfile, localCategories);
     onSaveCloudConfig(localCloud);
     setSavedBanner(true);
@@ -107,6 +113,7 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
   };
 
   const handleCategoryLimitChange = (id: string, val: number) => {
+    setIsDirty(true);
     setLocalCategories((prev) =>
       prev.map((c) => (c.id === id ? { ...c, monthlyLimit: val } : c))
     );
@@ -201,9 +208,10 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
             <input
               type="text"
               value={localProfile.partner1Name}
-              onChange={(e) =>
-                setLocalProfile({ ...localProfile, partner1Name: e.target.value })
-              }
+              onChange={(e) => {
+                setIsDirty(true);
+                setLocalProfile({ ...localProfile, partner1Name: e.target.value });
+              }}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white"
             />
           </div>
@@ -215,9 +223,10 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
             <input
               type="text"
               value={localProfile.partner2Name}
-              onChange={(e) =>
-                setLocalProfile({ ...localProfile, partner2Name: e.target.value })
-              }
+              onChange={(e) => {
+                setIsDirty(true);
+                setLocalProfile({ ...localProfile, partner2Name: e.target.value });
+              }}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white"
             />
           </div>
@@ -229,12 +238,13 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
             <input
               type="number"
               value={localProfile.monthlyIncomeTarget}
-              onChange={(e) =>
+              onChange={(e) => {
+                setIsDirty(true);
                 setLocalProfile({
                   ...localProfile,
                   monthlyIncomeTarget: Number(e.target.value),
-                })
-              }
+                });
+              }}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm font-bold text-emerald-300"
             />
           </div>
@@ -248,12 +258,13 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
               min="5"
               max="60"
               value={localProfile.superfluousWarningPercent}
-              onChange={(e) =>
+              onChange={(e) => {
+                setIsDirty(true);
                 setLocalProfile({
                   ...localProfile,
                   superfluousWarningPercent: Number(e.target.value),
-                })
-              }
+                });
+              }}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-amber-300 font-bold"
             />
           </div>
@@ -265,12 +276,13 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
             <input
               type="text"
               value={localProfile.accessPin || '25102020'}
-              onChange={(e) =>
+              onChange={(e) => {
+                setIsDirty(true);
                 setLocalProfile({
                   ...localProfile,
                   accessPin: e.target.value,
-                })
-              }
+                });
+              }}
               placeholder="Ex: 25102020"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm font-bold text-sky-300"
             />
@@ -566,6 +578,7 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
                     )
                   ) {
                     onResetToEmpty(localProfile);
+                    setIsDirty(false);
                     setSavedBanner(true);
                     setTimeout(() => setSavedBanner(false), 3000);
                   }

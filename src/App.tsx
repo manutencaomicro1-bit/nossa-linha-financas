@@ -107,10 +107,10 @@ export function App() {
       if (!isMounted) return;
       if (res.ok && res.data) {
         setAppData((prev) => {
-          // Only overwrite if cloud is newer or if current device still has default untouched demo
+          // Only overwrite local state if the cloud version is STRICTLY newer (> prev.updatedAt)
           if (
             !prev.updatedAt ||
-            res.data!.updatedAt >= prev.updatedAt ||
+            res.data!.updatedAt > prev.updatedAt ||
             prev.profile.partner1Name === 'Renato'
           ) {
             saveLocalData(res.data!);
