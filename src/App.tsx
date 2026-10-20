@@ -169,7 +169,13 @@ export function App() {
     };
   }, [cloudConfig]);
 
-  // Login / Logout handlers
+  // Auto-heal: if fixedBills is empty but categories already have fixed bill limits > 0, populate fixedBills automatically
+  useEffect(() => {
+    const bills = appData.fixedBills || [];
+    if (bills.length === 0 && appData.categories.some((c) => c.monthlyLimit > 0)) {
+      handleUpdateProfileAndCategories(appData.profile, appData.categories);
+    }
+  }, [appData.categories]);
   const handleLoginSuccess = (session: AuthSession, updatedSpaceId?: string) => {
     saveAuthSession(session);
     setAuthSession(session);
@@ -259,11 +265,18 @@ export function App() {
   };
 
   const handleUpdateFixedBillTemplate = (updatedBill: FixedBillTemplate) => {
+    const nextBills = (appData.fixedBills || []).map((b) =>
+      b.id === updatedBill.id ? updatedBill : b
+    );
+    const nextCategories = appData.categories.map((c) =>
+      c.id === updatedBill.categoryId
+        ? { ...c, monthlyLimit: updatedBill.expectedAmount }
+        : c
+    );
     persistData({
       ...appData,
-      fixedBills: (appData.fixedBills || []).map((b) =>
-        b.id === updatedBill.id ? updatedBill : b
-      ),
+      fixedBills: nextBills,
+      categories: nextCategories,
     });
   };
 
@@ -345,10 +358,62 @@ export function App() {
     profile: CoupleProfile,
     categories: CategoryBudget[]
   ) => {
+    // Automatically sync fixed/recurring categories with monthlyLimit > 0 into FixedBillsChecklist!
+    const currentBills = [...(appData.fixedBills || [])];
+
+    const isVariableDailyCategory = (catName: string, catId: string) => {
+      const lower = catName.toLowerCase();
+      return (
+        catId === 'cat_mercado' ||
+        catId === 'cat_combustivel' ||
+        catId === 'cat_delivery' ||
+        catId === 'cat_compras' ||
+        catId === 'cat_lazer' ||
+        catId === 'cat_metas' ||
+        lower.includes('mercado') ||
+        lower.includes('combust') ||
+        lower.includes('ifood') ||
+        lower.includes('delivery') ||
+        lower.includes('impulso') ||
+        lower.includes('passeio') ||
+        lower.includes('reserva')
+      );
+    };
+
+    categories.forEach((cat) => {
+      if (isVariableDailyCategory(cat.name, cat.id)) {
+        return; // Variable daily budgets stay as Radar thermometers only
+      }
+
+      const existingIdx = currentBills.findIndex((b) => b.categoryId === cat.id);
+      if (cat.monthlyLimit > 0) {
+        if (existingIdx >= 0) {
+          currentBills[existingIdx] = {
+            ...currentBills[existingIdx],
+            expectedAmount: cat.monthlyLimit,
+            active: true,
+          };
+        } else {
+          currentBills.push({
+            id: `fb_auto_${cat.id}`,
+            name: cat.name,
+            categoryId: cat.id,
+            expectedAmount: cat.monthlyLimit,
+            dueDay: 10,
+            owner: 'couple',
+            paymentMethod: 'boleto',
+            nature: cat.defaultNature,
+            active: true,
+          });
+        }
+      }
+    });
+
     persistData({
       ...appData,
       profile,
       categories,
+      fixedBills: currentBills,
     });
   };
 
