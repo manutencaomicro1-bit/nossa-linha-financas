@@ -44,6 +44,20 @@ export function formatShortMonthLabel(monthKey: string): string {
   return `${months[(m - 1) % 12]}/${String(y).slice(-2)}`;
 }
 
+export function buildCoupleSlug(partner1: string, partner2: string): string {
+  const clean = (s: string) =>
+    (s || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  const p1 = clean(partner1) || 'parceiro1';
+  const p2 = clean(partner2) || 'parceiro2';
+  const year = new Date().getFullYear();
+  return `${p1}-e-${p2}-${year}`;
+}
+
 export function formatBRL(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',

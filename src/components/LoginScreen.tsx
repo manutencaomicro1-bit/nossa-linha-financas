@@ -9,6 +9,7 @@ import {
   Cloud,
 } from 'lucide-react';
 import { AuthSession, CloudConfig, CoupleProfile } from '../types/finance';
+import { buildCoupleSlug } from '../services/storage';
 
 interface LoginScreenProps {
   profile: CoupleProfile;
@@ -23,7 +24,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 }) => {
   const [selectedUser, setSelectedUser] = useState<'partner1' | 'partner2'>('partner1');
   const [pin, setPin] = useState('');
-  const [spaceCode, setSpaceCode] = useState(cloudConfig.coupleSpaceId || 'renato-e-esposa-2026');
+  const [spaceCode, setSpaceCode] = useState(() =>
+    cloudConfig.coupleSpaceId && cloudConfig.coupleSpaceId !== 'renato-e-esposa-2026'
+      ? cloudConfig.coupleSpaceId
+      : buildCoupleSlug(profile.partner1Name, profile.partner2Name)
+  );
   const [showCloudField, setShowCloudField] = useState(false);
   const [error, setError] = useState('');
 

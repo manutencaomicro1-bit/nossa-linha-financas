@@ -20,7 +20,7 @@ import {
   CoupleProfile,
   ExpenseNature,
 } from '../types/finance';
-import { formatBRL } from '../services/storage';
+import { buildCoupleSlug, formatBRL } from '../services/storage';
 import { AVAILABLE_CATEGORY_ICONS, CategoryIcon } from './CategoryIcon';
 
 interface BudgetLimitsAndCloudProps {
@@ -74,6 +74,19 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
   React.useEffect(() => {
     setLocalCategories(categories);
   }, [categories]);
+
+  React.useEffect(() => {
+    setLocalCloud(cloudConfig);
+  }, [cloudConfig]);
+
+  // Automatically keep the secret code synced with the couple names as they type
+  React.useEffect(() => {
+    const autoSlug = buildCoupleSlug(localProfile.partner1Name, localProfile.partner2Name);
+    setLocalCloud((prev) => ({
+      ...prev,
+      coupleSpaceId: autoSlug,
+    }));
+  }, [localProfile.partner1Name, localProfile.partner2Name]);
   const [savedBanner, setSavedBanner] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
 
@@ -88,6 +101,7 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
   const handleSaveProfileAndBudgets = (e: React.FormEvent) => {
     e.preventDefault();
     onUpdateProfileAndCategories(localProfile, localCategories);
+    onSaveCloudConfig(localCloud);
     setSavedBanner(true);
     setTimeout(() => setSavedBanner(false), 3000);
   };

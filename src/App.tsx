@@ -367,7 +367,8 @@ export function App() {
   };
 
   const handleResetToEmpty = (currentDraftProfile?: CoupleProfile) => {
-    const empty = getEmptyData(currentDraftProfile || appData.profile);
+    const targetProfile = currentDraftProfile || appData.profile;
+    const empty = getEmptyData(targetProfile);
     persistData(empty);
   };
 
