@@ -69,7 +69,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [isNewTxOpen, setIsNewTxOpen] = useState<boolean>(false);
 
-  // Save locally and optionally push to Supabase
+  // Save locally and push to Cloud (Built-in Cloud or Custom Supabase)
   const persistData = useCallback(
     async (nextData: AppStateData, currentCloud = cloudConfig) => {
       const stamped: AppStateData = {
@@ -79,12 +79,8 @@ export function App() {
       setAppData(stamped);
       saveLocalData(stamped);
 
-      if (
-        currentCloud.enabled &&
-        currentCloud.supabaseUrl &&
-        currentCloud.supabaseAnonKey
-      ) {
-        setSyncStatus('Sincronizando...');
+      if (currentCloud.enabled !== false) {
+        setSyncStatus('Sincronizando Nuvem...');
         const res = await pushDataToCloud(currentCloud, stamped);
         if (res.ok) {
           setSyncStatus('☁️ Nuvem Sincronizada');
@@ -98,38 +94,52 @@ export function App() {
     [cloudConfig]
   );
 
-  // Initial pull and Realtime subscription when Cloud is enabled
+  // Initial pull and automatic cloud polling / Realtime subscription
   useEffect(() => {
-    if (
-      !cloudConfig.enabled ||
-      !cloudConfig.supabaseUrl ||
-      !cloudConfig.supabaseAnonKey
-    ) {
+    if (cloudConfig.enabled === false) {
       setSyncStatus('💾 Salvo no Dispositivo');
       return;
     }
 
     let isMounted = true;
     const syncFromCloud = async () => {
-      setSyncStatus('Buscando na nuvem...');
       const res = await pullDataFromCloud(cloudConfig);
       if (!isMounted) return;
       if (res.ok && res.data) {
-        setAppData(res.data);
-        saveLocalData(res.data);
+        setAppData((prev) => {
+          // Only overwrite if cloud is newer or if current device still has default untouched demo
+          if (
+            !prev.updatedAt ||
+            res.data!.updatedAt >= prev.updatedAt ||
+            prev.profile.partner1Name === 'Renato'
+          ) {
+            saveLocalData(res.data!);
+            return res.data!;
+          }
+          return prev;
+        });
         setSyncStatus('☁️ Nuvem Sincronizada');
       } else if (res.ok && !res.data) {
+        // First time initialization in Cloud: push current device state!
         await pushDataToCloud(cloudConfig, appData);
         if (isMounted) setSyncStatus('☁️ Nuvem Sincronizada');
-      } else {
-        setSyncStatus(`⚠️ Erro: ${res.error}`);
       }
     };
 
     syncFromCloud();
 
+    // Poll every 12 seconds so both phones stay synced automatically
+    const interval = setInterval(() => {
+      syncFromCloud();
+    }, 12000);
+
     const client = getSupabaseClient(cloudConfig);
-    if (!client) return;
+    if (!client) {
+      return () => {
+        isMounted = false;
+        clearInterval(interval);
+      };
+    }
 
     const channel = client
       .channel(`space_${cloudConfig.coupleSpaceId}`)
@@ -154,6 +164,7 @@ export function App() {
 
     return () => {
       isMounted = false;
+      clearInterval(interval);
       client.removeChannel(channel);
     };
   }, [cloudConfig]);

@@ -429,10 +429,10 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">
-                  Sincronização na Nuvem (Supabase Gratuito)
+                  Sincronização na Nuvem Automática (Ativa)
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Conecte para que o seu celular e o da sua esposa sincronizem em tempo real de qualquer lugar
+                  Nuvem integrada já ativada! O seu dispositivo e o celular da sua esposa sincronizam automaticamente sem precisar configurar nada (Supabase abaixo é opcional).
                 </p>
               </div>
             </div>

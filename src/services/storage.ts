@@ -66,8 +66,8 @@ export function formatBRL(value: number): string {
 }
 
 const DEFAULT_PROFILE: CoupleProfile = {
-  partner1Name: 'Renato',
-  partner2Name: 'Esposa',
+  partner1Name: 'Jhonw',
+  partner2Name: 'Amor',
   coupleLabel: 'Casal / Casa',
   monthlyIncomeTarget: 12000,
   superfluousWarningPercent: 25,
@@ -725,6 +725,13 @@ export function loadLocalData(): AppStateData {
     }
     if (!parsed.profile.accessPin || parsed.profile.accessPin === '1234') {
       parsed.profile.accessPin = '25102020';
+    }
+    if (
+      parsed.profile.partner1Name === 'Renato' &&
+      parsed.profile.partner2Name === 'Esposa'
+    ) {
+      parsed.profile.partner1Name = 'Jhonw';
+      parsed.profile.partner2Name = 'Amor';
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
     }
     return parsed;
@@ -749,8 +756,8 @@ export function getEmptyData(keepProfile?: CoupleProfile): AppStateData {
 
   return {
     profile: {
-      partner1Name: keepProfile?.partner1Name || 'Renato',
-      partner2Name: keepProfile?.partner2Name || 'Esposa',
+      partner1Name: keepProfile?.partner1Name || 'Jhonw',
+      partner2Name: keepProfile?.partner2Name || 'Amor',
       coupleLabel: keepProfile?.coupleLabel || 'Casal / Casa',
       monthlyIncomeTarget: 0,
       superfluousWarningPercent: keepProfile?.superfluousWarningPercent || 25,
@@ -782,24 +789,36 @@ export function saveAuthSession(session: AuthSession | null): void {
   }
 }
 
+const DEFAULT_SUPABASE_URL = 'https://axbdgodfpfrrhlhlblxq.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_Ceu3P9h6WlYRqewc9OgMuA_WwhYnCxS';
+
 export function loadCloudConfig(): CloudConfig {
   try {
     const raw = localStorage.getItem(CLOUD_CONFIG_KEY);
     if (!raw) {
       return {
-        supabaseUrl: '',
-        supabaseAnonKey: '',
-        coupleSpaceId: 'renato-e-esposa-2026',
-        enabled: false,
+        supabaseUrl: DEFAULT_SUPABASE_URL,
+        supabaseAnonKey: DEFAULT_SUPABASE_KEY,
+        coupleSpaceId: 'jhonw-e-amor-2026',
+        enabled: true,
       };
     }
-    return JSON.parse(raw) as CloudConfig;
+    const parsed = JSON.parse(raw) as CloudConfig;
+    return {
+      supabaseUrl: parsed.supabaseUrl || DEFAULT_SUPABASE_URL,
+      supabaseAnonKey: parsed.supabaseAnonKey || DEFAULT_SUPABASE_KEY,
+      coupleSpaceId:
+        parsed.coupleSpaceId === 'renato-e-esposa-2026'
+          ? 'jhonw-e-amor-2026'
+          : parsed.coupleSpaceId || 'jhonw-e-amor-2026',
+      enabled: true,
+    };
   } catch {
     return {
-      supabaseUrl: '',
-      supabaseAnonKey: '',
-      coupleSpaceId: 'renato-e-esposa-2026',
-      enabled: false,
+      supabaseUrl: DEFAULT_SUPABASE_URL,
+      supabaseAnonKey: DEFAULT_SUPABASE_KEY,
+      coupleSpaceId: 'jhonw-e-amor-2026',
+      enabled: true,
     };
   }
 }
@@ -828,7 +847,10 @@ export function getSupabaseClient(config: CloudConfig): SupabaseClient | null {
   return supabaseInstance;
 }
 
-export async function pushDataToCloud(config: CloudConfig, data: AppStateData): Promise<{ ok: boolean; error?: string }> {
+export async function pushDataToCloud(
+  config: CloudConfig,
+  data: AppStateData
+): Promise<{ ok: boolean; error?: string }> {
   const client = getSupabaseClient(config);
   if (!client) return { ok: false, error: 'Cliente Supabase não configurado' };
 
@@ -850,7 +872,9 @@ export async function pushDataToCloud(config: CloudConfig, data: AppStateData): 
   }
 }
 
-export async function pullDataFromCloud(config: CloudConfig): Promise<{ ok: boolean; data?: AppStateData; error?: string }> {
+export async function pullDataFromCloud(
+  config: CloudConfig
+): Promise<{ ok: boolean; data?: AppStateData; error?: string }> {
   const client = getSupabaseClient(config);
   if (!client) return { ok: false, error: 'Cliente Supabase não configurado' };
 
