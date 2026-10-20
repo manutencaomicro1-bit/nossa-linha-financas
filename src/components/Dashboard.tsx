@@ -110,7 +110,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
             : 'safe',
       };
     })
-    .sort((a, b) => b.percent - a.percent);
+    .sort((a, b) => {
+      if (b.percent !== a.percent) return b.percent - a.percent;
+      return b.monthlyLimit - a.monthlyLimit;
+    });
 
   const exceededCategories = categoryStats.filter((c) => c.status === 'exceeded');
   const warningCategories = categoryStats.filter((c) => c.status === 'warning');
@@ -388,10 +391,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* Grid de Termômetros por Categoria + Balanço 50/30/20 & Divisão Casal */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Termômetro de Categorias (2 colunas) */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-5">
+        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col lg:h-[540px]">
+          <div className="flex items-center justify-between mb-4 shrink-0">
             <div>
               <h3 className="text-base font-bold text-white">
                 Termômetro de Orçamento por Categoria
@@ -408,7 +411,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </button>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3.5 overflow-y-auto pr-2 flex-1">
             {categoryStats.map((cat) => {
               const barWidth = Math.min(100, Math.max(2, cat.percent));
               const isOver = cat.status === 'exceeded';
