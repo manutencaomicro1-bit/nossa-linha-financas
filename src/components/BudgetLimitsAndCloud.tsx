@@ -409,7 +409,7 @@ export const BudgetLimitsAndCloud: React.FC<BudgetLimitsAndCloudProps> = ({
                   <input
                     type="number"
                     min="0"
-                    step="50"
+                    step="any"
                     value={cat.monthlyLimit}
                     onChange={(e) =>
                       handleCategoryLimitChange(cat.id, Number(e.target.value))
